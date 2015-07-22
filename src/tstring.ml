@@ -19,4 +19,8 @@ let print t =
   to_ t
  
 let test() =
-  print ( Node [ Str "plop" ; Str " yo"; Node [Str "\n"; Node[]] ] )
+  let s = ( Node [ Str "plop" ; Str " yo"; Node [Str "\n"; Node[]] ] ) in
+  print s;
+  s |> tstring_to_string |> print_string 
+
+(*let _ = test ()*)
