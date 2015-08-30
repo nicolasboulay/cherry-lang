@@ -17,15 +17,9 @@ type t  =
   | Ref of string list (* TODO: adding integer index ref *)
 	(* Multiplicité *)
   | Mult of int * int
+(* | Not of t TODO: to complete *)
 
-(* Pour des raisons de performances, il faudrait manipuler des list de string
-  comme des string, ou des list de list de string ou un arbre *)
-
-let test = Tstring.Str ""
-
-(***)
-
-let sep = " "
+let sep = " " (*this is to avoid many " " string*)
 (*
  a & b
 ^ c
@@ -33,6 +27,9 @@ let sep = " "
   | e
   | f & g
 *)
+
+open Tstringop
+
 let rec to_string t =
   let rec to_string_ (st:string) front prev t =
     let separation =

@@ -11,12 +11,12 @@ type t  =
   | And of t * t
   | Or  of t * t
   | Xor of t list
-	(* Nommé *)
+	(* Named *)
   | Name of string 
-	(* Pointeur avec un path *)
-  | Ref of string list (* TODO: adding integer index ref *)
+	(* Pointer with path *)
+  | Ref of string list (* TODO: adding integer index ref, + reference  and ../ as directory *)
 	(* Multiplicité *)
-  | Mult of int * int
+  | Mult of int * int (*min/max*)
 (* | Not of t TODO: to complete *)
 
 open Tstringop
@@ -55,7 +55,7 @@ let to_string t =
     in
     match t, separation, prev with 
     | And (a, b), _, _ ->
-	Tstr [ to_string_ st t a; Str " "; to_string_ st t b]
+	Tstr [ to_string_ st t a; sep; to_string_ st t b]
     | Or (a,b), _, Or _ -> 
 	Tstr [ to_string_ st t a; 
 	       Str "\n";st;Str "| ";to_string_ st t b]
@@ -81,7 +81,7 @@ let (^) a b = Xor [a;b]
   let r = ((Name "toto" & Integer)
     ^ (Name "enum_t" & ((Name "token1" & Integer) 
 		      || (Float & Name "token2" & (Name "a" ^ Name "b"))) )
-    ^ ((Ref ["toto"] || Float || Ref ["enum_t"]) 
+    ^ ( (Ref ["toto"] || Float || Ref ["enum_t"]) 
        & Name "wierd" & (Name "a" ^ Name "b")))
     ^ (Name "Yo" & Name "Yoyo" & Name "Yi" & (Name "x" ^ Name "y" ^ Name "z"))
     ^ (Name "A" & (Name "a" ^ Name "b"))
