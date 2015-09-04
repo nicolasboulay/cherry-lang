@@ -257,7 +257,7 @@ let rec andCheckOne a b root =
 	| Some node -> andCheck node b root
 	| None -> false (*? unbound reference are always a bug ?*)
 	 )
-    | Mult (min, max), Mult (min2, max2) -> min <= min2 && max2 <= max
+    | Mult (min, max), Mult (min2, max2) -> min <= min2 && max2 <= max (* l'un est inclus dans l'autre *)
     | Mult (min,max), Xor l -> (**xor : array, composition*)
 	let rec check_array min max a =
 	  (*print_string "check_array "; print_int min ; 

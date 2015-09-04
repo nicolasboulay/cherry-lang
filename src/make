@@ -1,2 +1,2 @@
 #!/usr/bin/sh
-ocamlc -o g tstringop.ml tstring.ml grapedef.ml
+ocamlc -o g tstringop.ml tstring.ml cherrydef.ml
