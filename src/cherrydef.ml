@@ -132,63 +132,118 @@ let rec find path root =
 (**
    * Attention au cas Ref qui nécessite une racine pour trouver les réferences
 *)
-	
+type error = 
+  | No
+  | BasicTypeMismatch of t*t
+  | UnknownReference of t
+  | IncompatibleMultiplicity of t * t
+  | Multiplicity of t * t
+  | Other of t * t
+
+let print_error e =
+  let p_ a b =
+    Tstring.print (to_string a); 
+    print_endline "\n---";
+    Tstring.print (to_string b); print_endline "" 
+  in
+  match e with 
+  | No -> print_string "No error"
+  | UnknownReference a -> print_endline "Unknown reference :"; 
+      Tstring.print (to_string a)
+  | BasicTypeMismatch (a,b)-> print_endline "Basic type mismatch :"; p_ a b
+  | IncompatibleMultiplicity (a,b) -> print_endline "Incompatible multiplicity"; p_ a b
+  | Multiplicity (a,b) -> print_endline "Wrong multiplicty"; p_ a b
+  | Other (a,b) -> print_string "Error "; p_ a b
+
+(*let ( &&& ) a b = 
+  match a, b with 
+  | No, No -> No
+  | No, _ -> b
+  | _,_ -> a 
+
+let ( ||| ) a b = 
+  match a, b with 
+  | _, No 
+  | No, _ -> No
+  | _,_ -> a 
+*)
+let ( ||| ) a b = 
+  match a with 
+  | No -> No
+  | _ -> b ()
+
+let ( &&& ) a b = 
+  match a with 
+  | No -> b ()
+  | _ -> a
+
+
+
+
+
 (*c'est commutatif, cela permet de réduire les cas*)
 let rec andCheckOne a b root =
-  (*print_string "((";
-  print a; print_string "==";print b ;
-  print_string ")";*)
+  let check_ expr error =
+    if expr then
+      error
+    else 
+     No
+  in(*
+  print_string "(";
+  Tstring.print (to_string a); print_string " == ";Tstring.print (to_string b) ;
+  print_string ")\n";*)
   let r =
     match a,b with
-    | Integer, Integer -> true
-    | Float, Float -> true
-    | String, String -> true
-    | Integer, LInt _ -> true 
-    | Float, LFloat _ -> true
-    | String, LString _ -> true
-    | LString s1, LString s2 -> s1 == s2 (*tbc*)
-    | LFloat f1, LFloat f2 -> f1 == f2
-    | LInt i1, LInt i2 -> i1 == i2 
-    | a, And (b,c) -> (andCheck a b root) && (andCheck a c root)
-    | a, Or (b,c) -> (andCheck a b root) || (andCheck a c root)
-    | Xor [] , Xor [] -> true  
-    | Xor (a::c) , Xor (b::d) -> andCheck a b root && andCheck (Xor c) (Xor d) root
-    | Name _ , _ -> true
+    | Integer, Integer -> No
+    | Float, Float -> No
+    | String, String -> No
+    | Integer, LInt _ -> No
+    | Float, LFloat _ -> No
+    | String, LString _ -> No
+    | LString s1, LString s2 -> check_ (s1 == s2) (BasicTypeMismatch (a,b)) (*tbc*)
+    | LFloat f1, LFloat f2 -> check_ (f1 == f2) (BasicTypeMismatch (a,b))
+    | LInt i1, LInt i2 -> check_ (i1 == i2)  (BasicTypeMismatch (a,b))
+    | a, And (b,c) -> (andCheck a b root) &&& (fun () -> andCheck a c root)
+    | a, Or (b,c) -> (andCheck a b root) ||| (fun () -> andCheck a c root)
+    | Xor [] , Xor [] -> No  
+    | Xor (a::c) , Xor (b::d) -> andCheck a b root &&& (fun() -> andCheck (Xor c) (Xor d) root)
+    | Name _ , _ -> No
     | Ref path , b ->
 	let ref = find path root in (*todo: same name at different place must be catch*)
 	( match ref with
 	| Some node -> andCheck node b root
-	| None -> false (*? unbound reference are always a bug ?*)
+	| None -> UnknownReference a (*? unbound reference are always a bug ?*)
 	 )
-    | Mult (min, max), Mult (min2, max2) -> min <= min2 && max2 <= max (* l'un est inclus dans l'autre *)
+    | Mult (min, max), Mult (min2, max2) -> (* l'un est inclus dans l'autre *)
+	check_ (min <= min2 && max2 <= max) (IncompatibleMultiplicity (a,b))
     | Mult (min,max), Xor l -> (**xor : array, composition*)
-	let rec check_array min max a =
+	let rec check_array min max ll =
 	  (*print_string "check_array "; print_int min ; 
 	    print_string " "; print_int max; print_endline "";*)
-	  match a with (*! lent : o(n)*) 
-	  | [] -> min <= 0 && 0 <= max
+	  match ll with (*! lent : o(n)*) 
+	  | [] -> check_ (min <= 0 && 0 <= max) (Multiplicity (a,b))
 	  | (Xor b) :: [] -> check_array min max b 
 	  | (Xor b) :: l  -> check_array min max (b@l) 
-	  | Or (b,c) :: l -> (check_array min max (b::l)) || (check_array min max (c::l))
- 	  | And (b,c) :: l ->  (check_array min max (b::l)) && (check_array min max (c::l))
+	  | Or (b,c) :: l -> (check_array min max (b::l)) ||| (fun () -> check_array min max (c::l))
+ 	  | And (b,c) :: l ->  (check_array min max (b::l)) &&& (fun () -> check_array min max (c::l))
 	  | a :: l -> check_array (min-1) (max-1) l
 	in
 	check_array min max l
-    | _ -> false
+    | _ -> Other (a,b)
   in
   (*print_bool r; print_string ")";*)
   r
 and andCheck a b root =
-  (andCheckOne a b root ) || (andCheckOne b a root )
+  (andCheckOne a b root ) ||| ( fun () -> andCheckOne b a root )
 
 let rec check root =
   check_with_root root root
 and check_with_root node root = 
   match node with 
   | And (a,b) -> andCheck a b root
-  | Or (a,b) -> check_with_root a root && check_with_root b root
-  | Xor l -> List.fold_left (fun a t -> a && check_with_root t root) true l
-  | _ -> true
+  | Or (a,b) -> check_with_root a root &&& (fun () -> check_with_root b root)
+  | Xor l -> List.fold_left (fun a t -> a &&& (fun() -> check_with_root t root)) No l
+  | _ -> No
 
 let rec travel f node =
   match node with
@@ -226,30 +281,45 @@ and check_to_debug_ node root err =
   let print_ node root =
     print_string "Type error : ";
     to_string node |> Tstring.print; print_string "\n";
+    print_endline " Dependancies : ";
     print_dependancies node root;   
   in
-  if ( not ( check_with_root node root ) ) then
-    (
+  match check_with_root node root with
+  | No -> ()
+  | UnknownReference a -> print_ a root
+  | BasicTypeMismatch (a,b)
+  | IncompatibleMultiplicity (a,b)
+  | Multiplicity (a,b)
+  | Other (a,b) -> print_ a root; print_ b root	
+  (*if ( not ( check_with_root node root ) ) then
+  (
      match node with 
      | Or (b,c) 
      | And (b,c) -> check_to_debug_ b root (Some node); check_to_debug_ c root (Some node) 
      | Xor l -> List.iter (fun a -> check_to_debug_ a root (Some node)) l  
      | _ -> ()
-    ) else (
-    match err with 
-    | Some n -> print_ n root
-    | None -> ()
-  )
+  ) else (
+     match err with 
+     | Some n -> print_ n root
+     | None -> ()
+  )*)
 
 let (&) a b = And (a, b)
 let (||) a b = Or (a, b) 
 let (^) a b = Xor [a;b] 
 
-  let r = ((Name "toto" & Integer)
-    ^ (Name "enum_t" & ((Name "token1" & Integer) 
-		      || (Float & Name "token2" & (Name "a" ^ Name "b"))) )
-    ^ ( (Ref ["toto"] || Float || Ref ["enum_t"]) 
-       & Name "wierd" & (Name "a" ^ Name "b")))
+  let r = 
+    ( (Name "toto" & Integer)
+    ^ ( Name "enum_t" & ( (Name "token11" & Integer) 
+		        || (Float & Name "token2" & (Name "ai" ^ Name "bi"))
+                        ) 
+      )
+    ^ ( 
+       ( Ref ["toto"] ||  Ref ["enum_t"] || Float) 
+       & Name "wierd" & (Name "aw" ^ Name "bw")
+      )
+	
+    )
     ^ (Name "Yo" & Name "Yoyo" & Name "Yi" & (Name "x" ^ Name "y" ^ Name "z"))
     ^ (Name "A" & (Name "a" ^ Name "b"))
     ^ (Name "A" & (Name "a" || Name "b"))
@@ -301,8 +371,9 @@ let (^) a b = Xor [a;b]
     ^ (Name "X" || (Name "Y" ^ (Name "Z" & Name "T")))
 
 let ex = And (Name "f", Float)
-let _ = Tstring.print (to_string r)
-let _ = andCheck r r r |> print_bool
-let _ = check r  |> print_bool
-let _ = print_endline "plop : "
-let _ = check_to_debug r
+let ex1 = And (Name "i", Integer)
+(*let _ = Tstring.print (to_string r)
+let _ = andCheck r r r |> print_error*)
+let _ = check r  |> print_error
+(*let _ = print_endline "plop : "
+let _ = check_to_debug r*)
